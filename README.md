@@ -1,7 +1,7 @@
 # HandsOverSkins (plugin)
 
 BepInEx 6 IL2CPP plugin that loads custom skins (`*.hoskin`) into **HANDS OVER**. Skins are made with the
-[HandsOverSkins SDK](../HandsOverSkins-SDK).
+[HandsOverSkins SDK](https://github.com/HallowSL/HandsOverSkins-SDK).
 
 Features: custom wardrobe cards, Follow Rig creature skins (arm IK, rope hanging, jiggle), hand-cut stumps, ghost and
 dead-body materials, Random card, favourites (star + pin to top), mid-match costume changes synced over chat, card holder
