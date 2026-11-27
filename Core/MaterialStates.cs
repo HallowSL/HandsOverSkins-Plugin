@@ -107,9 +107,14 @@ internal static class MaterialStates
     {
         // The game also calls ReplaceMaterials(Hands/FullBody) on living characters (e.g. the BuzzWire round), which
         // turned custom hands into ghost hands. Ghost materials go on only while the character is dead.
-        if ((mode == Mode.GhostFull || mode == Mode.GhostHands) && Plugin.Cfg.GhostOnlyWhenDead.Value
-            && !(_owners.TryGetValue(logic.Pointer, out var cvcPtr) && _deadVisuals.Contains(cvcPtr)))
-            mode = Mode.Alive;
+        // When a player dies the game only calls ReplaceMaterials(Hands); for the base skins that list covers every
+        // material (the whole ghost turns see-through). So a dead character's ghost gets the whole custom model.
+        if (mode == Mode.GhostFull || mode == Mode.GhostHands)
+        {
+            bool dead = _owners.TryGetValue(logic.Pointer, out var cvcPtr) && _deadVisuals.Contains(cvcPtr);
+            if (dead) mode = Mode.GhostFull;
+            else if (Plugin.Cfg.GhostOnlyWhenDead.Value) mode = Mode.Alive;
+        }
         if (_byMat.Count == 0) return;
         Transform root;
         // _root is usually the rig's root bone; the meshes sit next to it, so use the same lookup as the stumps
