@@ -10,7 +10,7 @@ and they work in multiplayer: everybody with the same skin installed sees it, ev
 - Hand cutting, decapitation, ghost and dead-body materials work on custom skins.
 - **Random** card per character (picks from unlocked, custom-only, favourites or all skins).
 - **Favourites**: star any skin card in the wardrobe; starred skins are pinned to the top.
-- **Change costume mid-match** with hotkeys (F6 previous, F7 next, F8 random, F9 random favourite), synced to other players running the mod.
+- **Change costume mid-match** with hotkeys (F6 previous, F7 next, F10 random, F11 random favourite), synced to other players running the mod.
 - Per-skin card holder offsets for big hands and paws.
 
 ## Install

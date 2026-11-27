@@ -122,8 +122,8 @@ internal sealed class PluginConfig
             "players without the mod see a short 'HOSKIN …' line in chat.");
         LiveNextKey = cfg.Bind("Live Change", "NextSkinKey", "F7", "Next skin (Unity Input System key name, e.g. F7, PageDown, Numpad6). Empty = off.");
         LivePrevKey = cfg.Bind("Live Change", "PreviousSkinKey", "F6", "Previous skin.");
-        LiveRandomKey = cfg.Bind("Live Change", "RandomSkinKey", "F8", "Random unlocked skin.");
-        LiveFavoriteKey = cfg.Bind("Live Change", "RandomFavoriteKey", "F9", "Random skin from your favourites.");
+        LiveRandomKey = cfg.Bind("Live Change", "RandomSkinKey", "F10", "Random unlocked skin.");
+        LiveFavoriteKey = cfg.Bind("Live Change", "RandomFavoriteKey", "F11", "Random skin from your favourites.");
         FavoritesEnabled = cfg.Bind("Favorites", "Enabled", true, "Show a star on every wardrobe skin card to mark favourites.");
         FavoritesFirst = cfg.Bind("Favorites", "PinToTop", true, "List favourite skins first on each character's skin page.");
         RandomCardFirst = cfg.Bind("Favorites", "RandomCardFirst", true, "Put the Random card at the very front (before the favourites).");
