@@ -173,7 +173,7 @@ internal static class CharacterVisual_Initialize
     // the corpse body always wears the dead materials; it's only shown once the player dies
     private static void Postfix(Jaws.Gameplay.Character.Visual.CharacterVisualController __instance)
     {
-        try { MaterialStates.OnDeadBody(__instance); LiveSkins.Register(__instance); }
+        try { MaterialStates.SetDead(__instance, false); MaterialStates.OnDeadBody(__instance); LiveSkins.Register(__instance); }
         catch (Exception e) { Plugin.Logger.LogError($"Dead materials (init): {e}"); }
     }
 }
@@ -189,6 +189,16 @@ internal static class CharacterVisual_ActivateDeadBody
     private static void Postfix(Jaws.Gameplay.Character.Visual.CharacterVisualController __instance)
     {
         try { MaterialStates.OnDeadBody(__instance); } catch (Exception e) { Plugin.Logger.LogError($"Dead materials: {e}"); }
+    }
+}
+
+[HarmonyPatch(typeof(Jaws.Gameplay.Character.CharacterManager), nameof(Jaws.Gameplay.Character.CharacterManager.ClientHandleIsDeadChanged))]
+internal static class CharacterManager_IsDeadChanged
+{
+    private static void Postfix(Jaws.Gameplay.Character.CharacterManager __instance, bool newValue)
+    {
+        try { MaterialStates.SetDead(__instance.characterVisualController, newValue); }
+        catch (Exception e) { Plugin.Logger.LogError($"Ghost materials (dead state): {e}"); }
     }
 }
 
