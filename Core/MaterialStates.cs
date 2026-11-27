@@ -28,6 +28,8 @@ internal static class MaterialStates
     private static readonly Dictionary<IntPtr, Entry> _byMat = new();
     private static readonly Dictionary<string, Entry> _byName = new(StringComparer.Ordinal);
     private static readonly Dictionary<IntPtr, (CharacterSkinLogic logic, Mode mode)> _modes = new();
+    // alive-body logic -> its character, so ghost materials only show while that character is actually dead
+    private static readonly Dictionary<IntPtr, Jaws.Gameplay.Character.CharacterManager> _owners = new();
 
     public static void Register(Material alive, Material ghost, Material dead)
     {
@@ -86,11 +88,20 @@ internal static class MaterialStates
 
     public static void Forget(CharacterSkinLogic logic)
     {
-        if (logic != null) _modes.Remove(logic.Pointer);
+        if (logic != null) { _modes.Remove(logic.Pointer); _owners.Remove(logic.Pointer); }
     }
 
     private static void Apply(CharacterSkinLogic logic, Mode mode)
     {
+        // The game also calls ReplaceMaterials(Hands/FullBody) on living characters (e.g. the BuzzWire round), which
+        // turned custom hands into ghost hands. Ghost materials go on only while the character is dead.
+        if ((mode == Mode.GhostFull || mode == Mode.GhostHands) && Plugin.Cfg.GhostOnlyWhenDead.Value
+            && _owners.TryGetValue(logic.Pointer, out var owner))
+        {
+            bool dead = true;
+            try { dead = owner != null && !owner.WasCollected && owner.IsDead; } catch { }
+            if (!dead) mode = Mode.Alive;
+        }
         if (_byMat.Count == 0) return;
         Transform root;
         try { root = logic._root; } catch { return; }
@@ -150,6 +161,20 @@ internal static class MaterialStates
     {
         var logic = cvc?._aliveSkinLogic;
         if (logic == null) return;
+        if (!_owners.ContainsKey(logic.Pointer))
+        {
+            try
+            {
+                foreach (var o in UnityEngine.Object.FindObjectsByType(
+                             Il2CppInterop.Runtime.Il2CppType.Of<Jaws.Gameplay.Character.CharacterManager>(), FindObjectsSortMode.None))
+                {
+                    var m = o?.TryCast<Jaws.Gameplay.Character.CharacterManager>();
+                    if (m != null && m.characterVisualController != null && m.characterVisualController.Pointer == cvc.Pointer)
+                    { _owners[logic.Pointer] = m; break; }
+                }
+            }
+            catch (Exception e) { Plugin.Logger.LogWarning($"Ghost materials (owner lookup): {e.Message}"); }
+        }
         Set(logic, type switch
         {
             EMaterialContentType.FullBody => Mode.GhostFull,

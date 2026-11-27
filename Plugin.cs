@@ -52,6 +52,7 @@ internal sealed class PluginConfig
     public readonly ConfigEntry<bool> RandomRerollEachMatch;
     public readonly ConfigEntry<bool> AutoGhostMaterials;
     public readonly ConfigEntry<bool> AutoDeadMaterials;
+    public readonly ConfigEntry<bool> GhostOnlyWhenDead;
     public readonly ConfigEntry<string> DescriptionFormat;
     public readonly ConfigEntry<bool> DumpGameData;
     public readonly ConfigEntry<string> ExtraSkinFolder;
@@ -90,6 +91,9 @@ internal sealed class PluginConfig
             "Generate a ghost material (game shader 'MS/Ghost Unlit') for custom skin materials that don't ship one.");
         AutoDeadMaterials = cfg.Bind("Materials", "AutoDeadMaterials", true,
             "Generate a dead-body material (game shader 'Dissolve/SH_Dissolve_Lit5') for custom skin materials that don't ship one.");
+        GhostOnlyWhenDead = cfg.Bind("Materials", "GhostOnlyWhenDead", true,
+            "Custom skins wear ghost materials only while the character is dead. The game also asks for ghost hands on living " +
+            "players in some rounds (BuzzWire); set false to copy that.");
         DescriptionFormat = cfg.Bind("UI", "DescriptionFormat",
             "<size=120%><b>{name}</b></size>\n{description}\n<size=75%><alpha=#99>by {author}</size>",
             "How custom skin descriptions are rendered in the wardrobe. Tokens: {name} {description} {author} {version} {character}.");
