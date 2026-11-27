@@ -32,6 +32,7 @@ internal static class MaterialStates
     // (from CharacterManager.ClientHandleIsDeadChanged), so ghost materials only show while the character is dead
     private static readonly Dictionary<IntPtr, IntPtr> _owners = new();
     private static readonly HashSet<IntPtr> _deadVisuals = new();
+    private static readonly Dictionary<IntPtr, Transform> _bodies = new();   // logic -> aliveObject / deadObject
 
     public static void SetDead(CharacterVisualController cvc, bool dead)
     {
@@ -98,7 +99,7 @@ internal static class MaterialStates
 
     public static void Forget(CharacterSkinLogic logic)
     {
-        if (logic != null) { _modes.Remove(logic.Pointer); _owners.Remove(logic.Pointer); }
+        if (logic != null) { _modes.Remove(logic.Pointer); _owners.Remove(logic.Pointer); _bodies.Remove(logic.Pointer); }
     }
 
     private static void Apply(CharacterSkinLogic logic, Mode mode)
@@ -110,7 +111,8 @@ internal static class MaterialStates
             mode = Mode.Alive;
         if (_byMat.Count == 0) return;
         Transform root;
-        try { root = logic._root; } catch { return; }
+        // _root is usually the rig's root bone; the meshes sit next to it, so use the same lookup as the stumps
+        try { root = Stumps.MeshRoot(logic._root); } catch { return; }
         if (root == null) return;
 
         HashSet<IntPtr> hands = null;
@@ -168,6 +170,7 @@ internal static class MaterialStates
         var logic = cvc?._aliveSkinLogic;
         if (logic == null) return;
         _owners[logic.Pointer] = cvc.Pointer;
+        try { if (cvc.aliveObject != null) _bodies[logic.Pointer] = cvc.aliveObject.transform; } catch { }
         Set(logic, type switch
         {
             EMaterialContentType.FullBody => Mode.GhostFull,
@@ -179,6 +182,8 @@ internal static class MaterialStates
     public static void OnDeadBody(CharacterVisualController cvc)
     {
         var logic = cvc?._deathSkinLogic;
-        if (logic != null) Set(logic, Mode.Dead);
+        if (logic == null) return;
+        try { if (cvc.deadObject != null) _bodies[logic.Pointer] = cvc.deadObject.transform; } catch { }
+        Set(logic, Mode.Dead);
     }
 }
