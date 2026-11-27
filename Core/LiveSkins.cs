@@ -30,6 +30,12 @@ internal static class LiveSkins
     private static readonly Dictionary<IntPtr, CharacterVisualController> _visuals = new();
     private static readonly Dictionary<IntPtr, ESkinType> _override = new();   // logic -> forced skin
     private static readonly Dictionary<IntPtr, ESkinType> _current = new();    // logic -> last applied skin
+    // last ShowHead / ShowFullBody state per body: a new skin comes in fully visible, so these are replayed after a
+    // live change (first-person hides your own head)
+    private static readonly Dictionary<IntPtr, bool> _head = new(), _fullBody = new();
+
+    public static void NoteShowHead(CharacterSkinLogic logic, bool state) { if (logic != null) _head[logic.Pointer] = state; }
+    public static void NoteShowFullBody(CharacterSkinLogic logic, bool state) { if (logic != null) _fullBody[logic.Pointer] = state; }
     private static Key _next = Key.None, _prev = Key.None, _rand = Key.None, _fav = Key.None;
     private static string _keysFrom;
     private static readonly System.Random _rng = new();
@@ -58,6 +64,8 @@ internal static class LiveSkins
         if (logic == null) return;
         _override.Remove(logic.Pointer);
         _current.Remove(logic.Pointer);
+        _head.Remove(logic.Pointer);
+        _fullBody.Remove(logic.Pointer);
     }
 
     // ------------------------------------------------------------------ input
@@ -192,6 +200,12 @@ internal static class LiveSkins
             _override[logic.Pointer] = skin;
             try { logic.TrySetSkin(skin); }
             catch (Exception e) { Plugin.Logger.LogError($"Live skin change: {e}"); continue; }
+            try
+            {
+                if (_fullBody.TryGetValue(logic.Pointer, out bool full)) logic.ShowFullBody(full);
+                if (_head.TryGetValue(logic.Pointer, out bool head)) logic.ShowHead(head);
+            }
+            catch (Exception e) { Plugin.Logger.LogWarning($"Live skin change (head/body visibility): {e.Message}"); }
             try
             {
                 if (cut.left) logic.CutHand(false);

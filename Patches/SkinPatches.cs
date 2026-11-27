@@ -99,8 +99,9 @@ internal static class CharacterSkinLogic_TrySetSkin
 [HarmonyPatch(typeof(CharacterSkinLogic), nameof(CharacterSkinLogic.ShowHead))]
 internal static class CharacterSkinLogic_ShowHead
 {
-    private static void Postfix(CharacterSkinLogic __instance)
+    private static void Postfix(CharacterSkinLogic __instance, bool state)
     {
+        LiveSkins.NoteShowHead(__instance, state);
         HiddenParts.Reapply(__instance);
         Stumps.Update(__instance);
         FollowRigs.Refresh(__instance);
@@ -110,8 +111,9 @@ internal static class CharacterSkinLogic_ShowHead
 [HarmonyPatch(typeof(CharacterSkinLogic), nameof(CharacterSkinLogic.ShowFullBody))]
 internal static class CharacterSkinLogic_ShowFullBody
 {
-    private static void Postfix(CharacterSkinLogic __instance)
+    private static void Postfix(CharacterSkinLogic __instance, bool state)
     {
+        LiveSkins.NoteShowFullBody(__instance, state);
         HiddenParts.Reapply(__instance);
         Stumps.Update(__instance);
         FollowRigs.Refresh(__instance);

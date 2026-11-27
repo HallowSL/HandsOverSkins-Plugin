@@ -33,6 +33,7 @@ internal static class MaterialStates
     private static readonly Dictionary<IntPtr, IntPtr> _owners = new();
     private static readonly HashSet<IntPtr> _deadVisuals = new();
     private static readonly Dictionary<IntPtr, Transform> _bodies = new();   // logic -> aliveObject / deadObject
+    private static readonly Dictionary<IntPtr, (bool full, bool hands)> _ghost = new();
 
     public static void SetDead(CharacterVisualController cvc, bool dead)
     {
@@ -99,7 +100,7 @@ internal static class MaterialStates
 
     public static void Forget(CharacterSkinLogic logic)
     {
-        if (logic != null) { _modes.Remove(logic.Pointer); _owners.Remove(logic.Pointer); _bodies.Remove(logic.Pointer); }
+        if (logic != null) { _modes.Remove(logic.Pointer); _owners.Remove(logic.Pointer); _bodies.Remove(logic.Pointer); _ghost.Remove(logic.Pointer); }
     }
 
     private static void Apply(CharacterSkinLogic logic, Mode mode)
@@ -171,12 +172,16 @@ internal static class MaterialStates
         if (logic == null) return;
         _owners[logic.Pointer] = cvc.Pointer;
         try { if (cvc.aliveObject != null) _bodies[logic.Pointer] = cvc.aliveObject.transform; } catch { }
-        Set(logic, type switch
-        {
-            EMaterialContentType.FullBody => Mode.GhostFull,
-            EMaterialContentType.Hands => Mode.GhostHands,
-            _ => Mode.Alive,
-        });
+        // The game's replacements add up: a ghost gets FullBody and Hands (each swaps its own materials), and None
+        // undoes both. Keep both flags so a Hands call after FullBody doesn't turn the body back.
+        _ghost.TryGetValue(logic.Pointer, out var g);
+        if (type == EMaterialContentType.FullBody) g.full = true;
+        else if (type == EMaterialContentType.Hands) g.hands = true;
+        else g = default;
+        if (!g.full && !g.hands) _ghost.Remove(logic.Pointer); else _ghost[logic.Pointer] = g;
+        if (Plugin.Cfg.VerboseLogging.Value)
+            Plugin.Logger.LogInfo($"ReplaceMaterials({type}) on {cvc.name}: ghost body={g.full} hands={g.hands} dead={_deadVisuals.Contains(cvc.Pointer)}");
+        Set(logic, g.full ? Mode.GhostFull : g.hands ? Mode.GhostHands : Mode.Alive);
     }
 
     public static void OnDeadBody(CharacterVisualController cvc)
