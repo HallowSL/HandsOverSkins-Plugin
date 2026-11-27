@@ -12,6 +12,14 @@ public class SkinsRuntime : MonoBehaviour
     private string _locale;
 
     private static float _nextHideCheck;
+
+    // after the animators: held-item offsets go on top of this frame's animated holder pose
+    private void LateUpdate()
+    {
+        try { HeldItems.UpdateLocal(); }
+        catch (Exception e) { Plugin.Logger.LogError($"Held items: {e}"); }
+    }
+
     private void Update()
     {
         DescriptionGuard.Tick();

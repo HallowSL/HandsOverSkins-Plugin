@@ -8,25 +8,32 @@ namespace HandsOverSkins.Core;
 
 /// <summary>
 /// Per-skin offsets for things the character holds (the card holders Cards_left / Cards_right under the hand bones,
-/// or any other named transform). Same formula as the SDK preview (HOHeldItemPreview.Compose):
-/// local = rest + rest.rotation × position, rest.rotation × Euler(rotation), rest.scale × scale.
-/// The rest pose is remembered the first time a transform is touched and put back when another skin is worn.
+/// or any other named transform).
+///
+/// The holders' bind pose is nowhere near the hand (Cards_left sits ~0.8 m from hand.l); the game's animations move
+/// them into the hand. So offsets are applied every frame on top of whatever pose the holder has this frame:
+///   pose = base ∘ (position, Euler(rotation)), scale = rest.scale × scale
+/// where base is the animated pose when the game animated the holder this frame, otherwise the fallback:
+///   • game-hand offsets (older skins): the bind pose (same as the SDK preview of those skins);
+///   • Follow Rig skins with followSkinHand: the hand bone itself with the bind rotation (what the SDK shows on the
+///     model's A-pose), carried over to the model's hand: world = proxy ∘ (k · offset⁻¹ · c, offset⁻¹ · r).
 /// </summary>
 internal static class HeldItems
 {
-    private struct Rest { public Transform T; public Vector3 P; public Quaternion R; public Vector3 S; }
-    private static readonly Dictionary<IntPtr, Rest> _rest = new();                 // by transform
-    private static readonly Dictionary<IntPtr, List<IntPtr>> _byLogic = new();      // logic -> moved transforms
-
-    // Follow Rig skins with followSkinHand: holders that ride on the model's hand bone (see Follow)
-    private sealed class Attached
+    private sealed class Item
     {
-        public Transform T, G;
-        public Vector3 C; public Quaternion R;      // composed local pose under the game bone
+        public Transform T, G;                       // holder, its parent (game bone)
+        public Vector3 RestP, RestS; public Quaternion RestR;
+        public Vector3 OP; public Quaternion OR; public float S;
+        public bool Follow;
         public string SkinId; public IntPtr Logic;
-        public int Index = -1; public IntPtr Bone;  // proxy index in the rig that drove it last, and that rig's game bone
+        public int Index = -1; public IntPtr Bone;   // proxy index in the rig that drove it last, and that rig's game bone
+        public bool Written; public Vector3 WP; public Quaternion WR;  // local pose we left it in last frame
     }
-    private static readonly List<Attached> _attached = new();
+
+    private static readonly List<Item> _items = new();
+    private struct Rest { public Vector3 P, S; public Quaternion R; }
+    private static readonly Dictionary<IntPtr, Rest> _rest = new();   // by transform: bind pose, first time seen
 
     public static void Apply(CharacterSkinLogic logic, ESkinType skinType)
     {
@@ -41,8 +48,8 @@ internal static class HeldItems
             // isn't there, one level up (never wider, so another character's holders can't be picked up)
             var byName = Index(root);
             Dictionary<string, Transform> upper = null;
+            bool followRig = skin.FollowRig != null && skin.FollowRig.Bones.Count > 0;
 
-            var moved = new List<IntPtr>();
             foreach (var h in skin.HeldItems)
             {
                 Transform tr;
@@ -54,40 +61,62 @@ internal static class HeldItems
                     continue;
                 }
                 if (!_rest.TryGetValue(tr.Pointer, out var rest))
-                    _rest[tr.Pointer] = rest = new Rest { T = tr, P = tr.localPosition, R = tr.localRotation, S = tr.localScale };
-                var p = V3(h.P); var e = V3(h.R); float s = Mathf.Max(0.01f, h.S <= 0f ? 1f : h.S);
-                tr.localPosition = rest.P + rest.R * p;
-                tr.localRotation = rest.R * Quaternion.Euler(e);
+                    _rest[tr.Pointer] = rest = new Rest { P = tr.localPosition, R = tr.localRotation, S = tr.localScale };
+                float s = Mathf.Max(0.01f, h.S <= 0f ? 1f : h.S);
                 tr.localScale = rest.S * s;
-                moved.Add(tr.Pointer);
-                if (h.FollowSkinHand && skin.FollowRig != null && skin.FollowRig.Bones.Count > 0 && tr.parent != null)
-                    _attached.Add(new Attached { T = tr, G = tr.parent, C = tr.localPosition, R = tr.localRotation, SkinId = skin.Id, Logic = logic.Pointer });
+                _items.Add(new Item
+                {
+                    T = tr, G = tr.parent, RestP = rest.P, RestR = rest.R, RestS = rest.S,
+                    OP = V3(h.P), OR = Quaternion.Euler(V3(h.R)), S = s,
+                    Follow = h.FollowSkinHand && followRig && tr.parent != null,
+                    SkinId = skin.Id, Logic = logic.Pointer,
+                });
             }
-            if (moved.Count > 0) _byLogic[logic.Pointer] = moved;
+            if (Plugin.Cfg.VerboseLogging.Value) Plugin.Logger.LogInfo($"{skin}: {skin.HeldItems.Count} held item offset(s).");
         }
         catch (Exception e) { Plugin.Logger.LogError($"Held items: {e.Message}"); }
     }
 
-    public static void Forget(CharacterSkinLogic logic)
+    /// <summary>This frame's base pose for the holder (animated, or the fallback), with the skin's offset on top.</summary>
+    private static void Compose(Item a, out Vector3 p, out Quaternion r)
     {
-        if (logic == null) return;
-        _attached.RemoveAll(a => a.Logic == logic.Pointer);
-        if (_byLogic.Remove(logic.Pointer, out var list))
-            foreach (var p in list) _rest.Remove(p);
+        var cp = a.T.localPosition; var cr = a.T.localRotation;
+        bool animated = a.Written
+            ? (cp - a.WP).sqrMagnitude > 1e-10f || Quaternion.Angle(cr, a.WR) > 0.01f
+            : (cp - a.RestP).sqrMagnitude > 1e-10f || Quaternion.Angle(cr, a.RestR) > 0.01f;
+        Vector3 bp; Quaternion br;
+        if (animated) { bp = cp; br = cr; }
+        else if (a.Follow) { bp = Vector3.zero; br = a.RestR; }
+        else { bp = a.RestP; br = a.RestR; }
+        p = bp + br * a.OP;
+        r = br * a.OR;
+    }
+
+    /// <summary>Held items of skins without a follow rig (or not riding on the model's hand): every LateUpdate.</summary>
+    public static void UpdateLocal()
+    {
+        for (int n = _items.Count - 1; n >= 0; n--)
+        {
+            var a = _items[n];
+            if (a.T == null || a.T.WasCollected) { _items.RemoveAt(n); continue; }
+            if (a.Follow) continue;
+            Compose(a, out var p, out var r);
+            a.T.localPosition = p; a.T.localRotation = r;
+            a.Written = true; a.WP = a.T.localPosition; a.WR = a.T.localRotation;
+        }
     }
 
     /// <summary>
-    /// Called at the end of every follow-rig Drive: put attached holders on the model's hand. With
-    /// proxy = game × offset, the holder keeps the same pose relative to the proxy hand as it has relative to the game
-    /// hand: world = proxy ∘ (k · offset⁻¹ · C, offset⁻¹ · R), k = game scale / proxy scale.
+    /// End of every follow-rig Drive: holders with followSkinHand ride on the model's hand. With proxy = game × offset
+    /// they keep the pose relative to the proxy hand they'd have relative to the game hand.
     /// </summary>
     public static void Follow(string skinId, Transform[] game, Transform[] proxies, Quaternion[] offsets)
     {
-        if (_attached.Count == 0 || game == null) return;
-        for (int n = 0; n < _attached.Count; n++)
+        if (_items.Count == 0 || game == null) return;
+        for (int n = 0; n < _items.Count; n++)
         {
-            var a = _attached[n];
-            if (a.SkinId != skinId || a.T == null || a.T.WasCollected || a.G == null) continue;
+            var a = _items[n];
+            if (!a.Follow || a.SkinId != skinId || a.T == null || a.T.WasCollected || a.G == null) continue;
             int i = a.Index;
             if (i < 0 || i >= game.Length || game[i] == null || game[i].Pointer != a.Bone)
             {
@@ -96,19 +125,20 @@ internal static class HeldItems
                 a.Index = i; a.Bone = game[i].Pointer;
             }
             if (game[i] == null || proxies[i] == null) continue;
+            Compose(a, out var c, out var q);
             var P = proxies[i];
             var inv = Quaternion.Inverse(offsets[i]);
             float ps = P.lossyScale.x, gs = game[i].lossyScale.x;
             float k = Mathf.Abs(ps) > 1e-6f ? gs / ps : 1f;
-            // C is local to the holder's parent; if the proxy follows a bone further up, express C in that bone first
-            Vector3 c = a.C; Quaternion r = a.R;
+            // c is local to the holder's parent; if the proxy follows a bone further up, express it in that bone first
             if (game[i].Pointer != a.G.Pointer)
             {
                 var gw = a.G.TransformPoint(c);
+                q = Quaternion.Inverse(game[i].rotation) * (a.G.rotation * q);
                 c = game[i].InverseTransformPoint(gw);
-                r = Quaternion.Inverse(game[i].rotation) * (a.G.rotation * r);
             }
-            a.T.SetPositionAndRotation(P.TransformPoint(k * (inv * c)), P.rotation * inv * r);
+            a.T.SetPositionAndRotation(P.TransformPoint(k * (inv * c)), P.rotation * inv * q);
+            a.Written = true; a.WP = a.T.localPosition; a.WR = a.T.localRotation;
         }
     }
 
@@ -120,14 +150,23 @@ internal static class HeldItems
         return -1;
     }
 
+    public static void Forget(CharacterSkinLogic logic) => RestoreFor(logic);
+
     private static void RestoreFor(CharacterSkinLogic logic)
     {
-        _attached.RemoveAll(a => a.Logic == logic.Pointer || a.T == null || a.T.WasCollected);
-        if (!_byLogic.Remove(logic.Pointer, out var list)) return;
-        foreach (var p in list)
+        if (logic == null) return;
+        for (int n = _items.Count - 1; n >= 0; n--)
         {
-            if (!_rest.TryGetValue(p, out var r) || r.T == null || r.T.WasCollected) continue;
-            r.T.localPosition = r.P; r.T.localRotation = r.R; r.T.localScale = r.S;
+            var a = _items[n];
+            if (a.Logic != logic.Pointer && a.T != null && !a.T.WasCollected) continue;
+            if (a.T != null && !a.T.WasCollected)
+            {
+                // back to the bind pose only if we were the last to move it (an animated holder is the animator's)
+                if (!a.Written || ((a.T.localPosition - a.WP).sqrMagnitude < 1e-10f && Quaternion.Angle(a.T.localRotation, a.WR) < 0.01f))
+                { a.T.localPosition = a.RestP; a.T.localRotation = a.RestR; }
+                a.T.localScale = a.RestS;
+            }
+            _items.RemoveAt(n);
         }
     }
 
