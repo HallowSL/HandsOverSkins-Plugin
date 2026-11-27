@@ -1,0 +1,37 @@
+// Example: a separate BepInEx IL2CPP plugin that ships its own bundle and/or reacts to skins.
+// (Rename to .cs inside your own project; it is .txt here so it isn't compiled into HandsOverSkins.)
+
+using System.IO;
+using BepInEx;
+using BepInEx.Unity.IL2CPP;
+using HandsOverSkins.API;
+
+[BepInPlugin("yourname.myskinpack", "My Skin Pack", "1.0.0")]
+[BepInDependency(HandsOverSkins.Plugin.Guid)]
+public class MySkinPack : BasePlugin
+{
+    public override void Load()
+    {
+        // Any *.hoskin file under BepInEx/plugins is loaded automatically.
+        // Loading explicitly is only needed for bundles stored elsewhere:
+        string dir = Path.GetDirectoryName(typeof(MySkinPack).Assembly.Location);
+        foreach (var file in Directory.GetFiles(dir, "*.bundle"))
+            SkinAPI.LoadSkinBundle(file);
+
+        SkinAPI.SkinRegistered += skin => Log.LogInfo($"Skin available: {skin.DisplayName} for {skin.Character} (#{(int)skin.SkinType})");
+        SkinAPI.SkinsInjected += provider => Log.LogInfo($"{SkinAPI.Skins.Count} custom skins are in the wardrobe.");
+    }
+}
+
+// Building a skin fully in code (e.g. from a prefab you loaded yourself):
+//
+//   var skin = new CustomSkin {
+//       Id = "yourname.ben_pirate", DisplayName = "Pirate", Description = "Arr.",
+//       Author = "you", Character = Jaws.Characters.ECharacterType.Ben,
+//       RequiredLevel = 3, Order = 100, Prefab = prefab, Portrait = sprite,
+//   };
+//   skin.BodyParts[Jaws.Characters.ESkinBodyPart.Outfit] = new() { prefab.transform.Find("Ben_pirate").GetComponent<SkinnedMeshRenderer>() };
+//   skin.BodyParts[Jaws.Characters.ESkinBodyPart.Hat]    = new() { prefab.transform.Find("Ben_pirate_hat").GetComponent<SkinnedMeshRenderer>() };
+//   skin.HiddenParts.Add(Jaws.Characters.ESkinBodyPart.Hair);
+//   skin.LocalizedDescriptions["fr"] = "Arr, en français.";
+//   SkinAPI.RegisterSkin(skin);

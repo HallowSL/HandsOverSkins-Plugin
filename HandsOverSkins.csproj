@@ -1,0 +1,79 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    HandsOverSkins - BepInEx 6 (IL2CPP) custom skin loader for HANDS OVER.
+
+    Build requirements
+      1. Install BepInEx 6 Bleeding Edge, "Unity.IL2CPP-win-x64" build, into the game folder.
+      2. Launch the game once so BepInEx generates  <Game>\BepInEx\interop\*.dll
+      3. dotnet build -c Release      (override the game path with -p:GameDir="X:\path\to\HANDS OVER")
+
+    The built DLL is copied to <Game>\BepInEx\plugins\HandsOverSkins\ automatically.
+    Release builds also write a Thunderstore package to bin\Thunderstore\<Author>-HandsOverSkins-<Version>.zip
+    (manifest from the properties below, README/CHANGELOG/icon from the Thunderstore folder).
+    Bump <Version> and add a CHANGELOG.md section for each release.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>HandsOverSkins</AssemblyName>
+    <RootNamespace>HandsOverSkins</RootNamespace>
+    <Version>1.1.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <DebugType>embedded</DebugType>
+
+    <GameDir Condition="'$(GameDir)' == ''">D:\SteamGames\steamapps\common\HANDS OVER</GameDir>
+    <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
+    <InteropDir>$(BepInExDir)\interop</InteropDir>
+
+    <ThunderstoreAuthor Condition="'$(ThunderstoreAuthor)' == ''">Hallow</ThunderstoreAuthor>
+    <ThunderstoreWebsite Condition="'$(ThunderstoreWebsite)' == ''"></ThunderstoreWebsite>
+    <!-- Dependency strings, comma separated. Use the BepInEx IL2CPP pack of the community you upload to. -->
+    <ThunderstoreDeps Condition="'$(ThunderstoreDeps)' == ''">BepInEx-BepInExPack_IL2CPP-6.0.788</ThunderstoreDeps>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="$(BepInExDir)\core\BepInEx.Core.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\core\BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\core\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\core\Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\core\0Harmony.dll" Private="false" />
+    <!-- Every generated interop assembly (Jaws.Runtime, UnityEngine.*, Unity.Localization, Il2Cppmscorlib, ...) -->
+    <Reference Include="$(InteropDir)\*.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CheckInterop" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(InteropDir)\Jaws.Runtime.dll')"
+           Text="Interop assemblies not found in '$(InteropDir)'. Install BepInEx 6 IL2CPP and launch HANDS OVER once, or pass -p:GameDir=..." />
+  </Target>
+
+  <Target Name="CopyToPlugins" AfterTargets="Build" Condition="Exists('$(BepInExDir)\plugins')">
+    <MakeDir Directories="$(BepInExDir)\plugins\HandsOverSkins" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExDir)\plugins\HandsOverSkins" />
+  </Target>
+
+  <Target Name="ThunderstorePackage" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <TsStage>$(BaseIntermediateOutputPath)thunderstore\</TsStage>
+      <TsOut>$(MSBuildProjectDirectory)\bin\Thunderstore\</TsOut>
+      <TsZip>$(TsOut)$(ThunderstoreAuthor)-HandsOverSkins-$(Version).zip</TsZip>
+      <TsDepsJson>&quot;$(ThunderstoreDeps.Replace(' ', '').Replace(',', '&quot;,&quot;'))&quot;</TsDepsJson>
+      <TsDepsJson Condition="'$(ThunderstoreDeps)' == ''"></TsDepsJson>
+    </PropertyGroup>
+    <RemoveDir Directories="$(TsStage)" />
+    <MakeDir Directories="$(TsStage)plugins\HandsOverSkins;$(TsOut)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(TsStage)plugins\HandsOverSkins" />
+    <Copy SourceFiles="Thunderstore\README.md;Thunderstore\CHANGELOG.md;Thunderstore\icon.png" DestinationFolder="$(TsStage)" />
+    <WriteLinesToFile File="$(TsStage)manifest.json" Overwrite="true"
+      Lines="{;  &quot;name&quot;: &quot;HandsOverSkins&quot;,;  &quot;version_number&quot;: &quot;$(Version)&quot;,;  &quot;website_url&quot;: &quot;$(ThunderstoreWebsite)&quot;,;  &quot;description&quot;: &quot;Custom skins for HANDS OVER: skin bundles, Follow Rig creatures, favourites, random skins and mid-match costume changes.&quot;,;  &quot;dependencies&quot;: [$(TsDepsJson)];}" />
+    <Delete Files="$(TsZip)" />
+    <ZipDirectory SourceDirectory="$(TsStage)" DestinationFile="$(TsZip)" />
+    <Message Importance="high" Text="Thunderstore package: $(TsZip)" />
+  </Target>
+
+</Project>

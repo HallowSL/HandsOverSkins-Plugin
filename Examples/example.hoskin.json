@@ -1,0 +1,24 @@
+{
+  "hoskinFormat": 1,
+  "id": "yourname.ben_pirate",
+  "displayName": "Pirate",
+  "description": "Ben found a treasure map in a client's ledger and never came back to the office. He still counts doubloons twice.",
+  "author": "YourName",
+  "version": "1.0.0",
+  "character": "Ben",
+  "requiredLevel": 3,
+  "order": 100,
+  "prefab": "assets/skins/ben_pirate/sk_ben_skin_pirate.fbx",
+  "portrait": "assets/skins/ben_pirate/yourname_ben_pirate_portrait.png",
+  "bodyParts": [
+    { "part": "Outfit", "renderers": [ "Ben_skin_pirate" ] },
+    { "part": "Hat",    "renderers": [ "Ben_skin_pirate_hat" ] }
+  ],
+  "hiddenParts": [ "Hair" ],
+  "materials": [
+    { "material": "M_Ben_skin_pirate", "shader": "Universal Render Pipeline/Lit", "autoGhost": true, "autoDead": true },
+    { "material": "M_Ben_skin_pirate_hat", "autoGhost": true, "autoDead": true }
+  ],
+  "localizedNames": { "fr": "Pirate", "de": "Pirat" },
+  "localizedDescriptions": { "fr": "Ben a trouvé une carte au trésor dans le registre d'un client…" }
+}
